@@ -1,0 +1,6 @@
+*.json
+venv/
+__pycache__/
+*.pyc
+*.save
+synced_ids.txt
