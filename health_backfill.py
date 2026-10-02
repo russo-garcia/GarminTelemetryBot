@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from health_sync import sync_health_data
 
 def run_health_backfill():
-    start_date = datetime(2026, 6, 24)
+    start_date = datetime(2026, 9, 23)
     end_date = datetime.now()
     
     print(f"Starting health data backfill from {start_date.strftime('%Y-%m-%d')} to today...")

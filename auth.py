@@ -4,7 +4,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 flow = InstalledAppFlow.from_client_secrets_file('client_secrets.json', ['https://www.googleapis.com/auth/drive.file'])
 
 # Open the browser to authenticate
-creds = flow.run_local_server(port=0)
+creds = flow.run_local_server(port=0, open_browser=False)
 
 # Save the resulting credentials
 with open('token.json', 'w') as f:
