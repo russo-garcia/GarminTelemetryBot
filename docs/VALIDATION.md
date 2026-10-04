@@ -163,3 +163,86 @@ activation or push was performed. Synthetic ranges are fixtures, not personal da
 The implementation is ready for local review before Pi staging, not approved for
 activation. See [HEALTH_FINALIZATION.md](HEALTH_FINALIZATION.md) for invariants,
 limits, concurrency, bootstrap/repair and the staged migration/rollback procedure.
+
+
+## Daily health finalization — successful Raspberry Pi staging and source freeze (2026-10-05)
+
+The earlier local-development section is a historical checkpoint. Credential-free
+Pi staging is now complete, including the corrected calendar-only verification.
+This record does not authorize deployment, acquisition, historical bootstrap,
+service changes, timer installation/activation or a push.
+
+Exact Pi-validated implementation commit:
+`9465dc06da1431a07862679ee4f6183e5eeaf657` — `Add contiguous daily health finalization`.
+
+All 16 reviewed feature files were committed without edits after staging. The
+implementation commit's full file bytes match both the review-bundle SHA-256
+manifest and the returned Pi staging manifest. Five supporting baseline components
+remain unchanged: `garmin_auth.py`, `collector_runtime.py`, activity `backfill.py`,
+`renpho_sync.py`, and `tests/test_garmin_auth.py`. This appended record is made in a
+separate documentation-only commit; it does not alter the validated implementation.
+
+### User-returned Pi evidence
+
+- Architecture: **armv7l**.
+- Python: **3.13.5**.
+- systemd: **257**.
+- Complete reviewed suite: **94/94 tests passed** (46 retained collector/coordinator,
+  46 health-state/workflow, 2 timer-contract/DST tests).
+- Additional synthetic filesystem/state checks: **17/17 passed**.
+- Temporary rendered-unit verification: **passed**, return code 0. No unit installed
+  or activated; generators and man invocation disabled.
+- Source hash parity before and after validation: **true**; all 21 source/support
+  files matched. Bytecode persistence: disabled; zero bytecode files reported.
+- Authentication calls: **0**.
+- External API calls: **0**.
+- Production credentials opened: **false**.
+- Production services invoked: **false**.
+- Production source modified: **false**.
+- Initial staging writes remained under its isolated temporary staging tree.
+- Calendar-only rerun diagnostic writes: **0**; application imports: **0**;
+  production files opened: **false**; service actions: **0**.
+
+### Calendar parser correction and verified UTC results
+
+The initial overall staging result was blocked solely by the temporary harness:
+its parser recognized `Iter. #N`, whereas systemd 257 returned `Iteration #N`.
+Only the first occurrence was retained, so the expected three-occurrence checks
+failed despite all calendar commands returning zero. No application, reviewed test,
+service template or timer file changed. The temporary parser now accepts both label
+forms; 47 local harness safety/regression tests passed. Original staging evidence
+was preserved.
+
+The corrected credential-free calendar-only rerun revalidated the 21 staged file
+hashes before/after and passed on the same Pi with systemd 257. The original 94-test,
+17-check and temporary-unit results were retained rather than unnecessarily rerun.
+All three calendar commands returned 0 with three occurrences. The exact expression
+`*-*-* 10:00:00 Europe/Berlin` is **validated**.
+
+| Check | Verified occurrences (UTC) |
+|---|---|
+| Current-date sequence at rerun | 2026-10-05 08:00; 2026-10-06 08:00; 2026-10-07 08:00 |
+| March transition | 2026-03-28 09:00; 2026-03-29 08:00; 2026-03-30 08:00 |
+| October transition | 2026-10-24 08:00; 2026-10-25 09:00; 2026-10-26 09:00 |
+
+These values preserve 10:00 Europe/Berlin on both sides of each DST change.
+The March command used base time 2026-03-27 12:00:00 UTC; October used
+2026-10-23 12:00:00 UTC. Both requested three iterations. Final corrected result:
+
+**HEALTH FINALIZATION PI STAGING VALIDATED — READY FOR SOURCE FREEZE/DEPLOYMENT REVIEW**
+
+### Validation provenance and scope
+
+- Required prior Git baseline: `6d550ee7cefa89395fb1f519acbe5168767b2b6c`.
+- `HEALTH_FINALIZATION_REVIEW.md` SHA-256:
+  `7b0a55b1545a488e7df6a81016c27a37945a7aa175b8f6d225de4cf9cf2d52ac`.
+- Original user-returned full Pi staging transcript SHA-256:
+  `d160b696d3bddb9d8d94d9b1e2e8357253e935f88c92df00070495d9f4fdceb0`.
+- Corrected calendar-only evidence: user-returned terminal JSON in the source-freeze
+  request, confirming all calendar gates passed and source parity remained true.
+- Private transcripts and temporary staging harnesses remain outside Git. The
+  unrelated `.DS_Store` is excluded, untracked and untouched.
+
+This is a source freeze and validation record only. No production changes, live
+Garmin/Drive/Renpho/Telegram operations, historical backfill, timer activation or
+push took place during source freeze. Deployment planning awaits separate approval.
