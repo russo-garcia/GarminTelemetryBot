@@ -149,9 +149,11 @@ activity requests can still select/upload the same activity. Do not mistake the
 Garmin lock for a global job/idempotency lock. Fixing that race is separate scope.
 The current bot's caller authorization policy is also unchanged.
 
-Real garminconnect 0.3.16 and ARM/Linux behavior are not exercised by these mocked
-Mac tests. Before production rollout, run the credential-free suite with the Pi's
-Python on a staging copy, then separately approve a bounded live smoke check.
+The identical 46-test suite has now passed on the Pi's ARM/Linux Python 3.13.5
+in credential-free staging, and installed garminconnect 0.3.16 passed static
+interface/source-identity checks. Real SDK authentication and live responses remain
+untested in this phase. See VALIDATION.md for the source-freeze and staging record;
+production deployment and a bounded live smoke check require separate approvals.
 No fairness guarantee or forced SDK-operation timeout is introduced. Library updates
 require revalidation of refresh/persistence and guarded-reader semantics.
 

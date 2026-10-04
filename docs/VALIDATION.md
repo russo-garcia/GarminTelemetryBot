@@ -57,13 +57,65 @@ prescription projection/matching or report implementation was modified. No perso
 analytics replay/report regeneration is required for this source-only collector
 coordination patch, and none was performed.
 
+## Successful Raspberry Pi credential-free staging and source freeze
+
+The exact reviewed implementation was frozen, without source/test edits, in
+`7adf3afb4af261d88b759c0d22497e7577c255e8`:
+`Coordinate Garmin authentication across collector and maintenance paths`.
+Its parent is the audited baseline `a1634372ecf912a9cfe6edefef857fd7f3b73abc`.
+This validation update is a separate documentation-only commit.
+
+User-returned live staging evidence established:
+
+- Raspberry Pi architecture: **armv7l**; Python: **3.13.5**.
+- Installed **garminconnect 0.3.16**: static source/interface compatibility PASS.
+  The package was not imported and no real Garmin client was constructed.
+- All **46 reviewed tests passed in 4.814 seconds**, including threads, spawned
+  processes, contention timeout, SIGKILL release, fork/inherited descriptors,
+  stable lock inode, O_RDONLY reader, fresh loading, expired facade, activity/health
+  payloads, all backfill entry paths and import-side-effect checks.
+- All **11 reviewed file hashes** matched before and after execution. The two
+  unchanged backfill support files matched the audited baseline. Ten Python source
+  files compiled; **zero bytecode files** were created.
+- No production credential/config contents were opened, no authentication/API call
+  was made, and no production services/schedulers were invoked or changed.
+- Diagnostic writes were confined to the unique isolated staging run directory.
+  Ordinary SSH/OS bookkeeping and independent existing production operations are
+  outside that assertion.
+
+Evidence identifiers (no private runtime material is included in Git):
+
+- Original review bundle SHA-256:
+  `c05cf9010c03370194caba3d3c37e55f9ea2663f71c6c17c97874546414c49b0`.
+- Complete user-returned successful staging transcript SHA-256:
+  `25b59d2d6a661403a8cbf4c4c3e9ae43da0b76c3574af75b68f16bc9736a5a2f`.
+- Implementation commit file blobs are the preserved source-hash reference.
+
+An initial Pi run passed 45 tests but the temporary validation harness blocked
+`os.posix_spawn` used by the intentional fresh-Python import test. No implementation
+assertion failed. Only the temporary harness and its safety tests were corrected:
+its subprocess/posix_spawn exception requires the exact staging interpreter,
+arguments, inherited environment and SHA-256 of that reviewed child code. Twenty-five
+harness safety tests passed, explicitly exercising posix_spawn and denial of arbitrary
+processes, private reads, outside writes, network and real SDK construction. The
+unchanged 46-test suite then passed locally and on the Pi. Temporary harness files
+are not collector source and are not part of this repository.
+
 ## Limitations / release gate
 
-This is development validation, not deployed ARM/Linux or real SDK integration
-validation. The Pi's Python 3.13.5 / garminconnect 0.3.16 environment remains untouched.
-A credential-free staging test there and separately approved bounded live smoke
-checks are required before production rollout. The auth lock is advisory and requires
-all collector/manual Garmin entrants to migrate together. See GARMIN_COORDINATION.md
-for residual Drive/ledger races, API compatibility changes, rollout and rollback.
+Credential-free ARM/Linux staging is complete. This is not a production deployment
+or live Garmin integration test; static result annotations cannot prove live API
+payload behavior. No packages were installed/upgraded on the Pi.
 
-No commit, push, service change, timer or deployment is part of this pass.
+Source freeze and this documentation commit do not authorize deployment, service
+restart, credential access, live smoke tests, pushes or a prescription worker/timer.
+Current production metadata and maintenance quiescence must be checked for the
+controlled rollout. The old collector has no reliable read-only in-flight-request
+indicator: service state, thread counts or a closed token descriptor cannot prove
+that a request is idle. Do not describe process termination as graceful SDK drain.
+
+All collector/manual entrants must migrate together. Keep the current token store
+in place and preserve the separate stable lock inode across deployment/rollback.
+See GARMIN_COORDINATION.md for the still-separate Drive/ledger races and API changes.
+The next operational boundary is explicit controlled-deployment approval, followed
+by separate approval for any live Garmin smoke test.
