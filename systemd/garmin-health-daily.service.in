@@ -1,0 +1,21 @@
+# REVIEW TEMPLATE ONLY. Substitute the existing deployment's non-secret values.
+# Do not install until Pi staging and separate bootstrap/activation approval.
+[Unit]
+Description=Finalize past Garmin health days with a contiguous watermark
+Wants=network-online.target
+After=network-online.target time-sync.target
+
+[Service]
+Type=oneshot
+User=@COLLECTOR_USER@
+Group=@COLLECTOR_GROUP@
+WorkingDirectory=@COLLECTOR_DIR@
+Environment="GARMIN_TOKEN_STORE=@COLLECTOR_DIR@/garmin_tokens.json"
+Environment="GARMIN_COORDINATOR_LOCK=@COLLECTOR_DIR@/garmin_auth.lock"
+Environment="GARMIN_LOCK_TIMEOUT_SECONDS=5"
+UMask=0077
+ExecStart=@COLLECTOR_DIR@/venv/bin/python -B @COLLECTOR_DIR@/health_daily.py --max-days 366 --max-seconds 3600 --pace-seconds 3
+# No forced termination in the middle of authentication publication/Drive upload.
+# Application limits are checked between requests; SDK HTTP timeouts are unchanged.
+TimeoutStartSec=infinity
+Restart=no

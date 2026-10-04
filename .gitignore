@@ -15,3 +15,6 @@ synced_ids.txt
 .venv*/
 .pytest_cache/
 .coverage
+
+# Daily health finalization state, stable job lock and crash remnants
+.health-runtime/

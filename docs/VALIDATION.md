@@ -119,3 +119,47 @@ in place and preserve the separate stable lock inode across deployment/rollback.
 See GARMIN_COORDINATION.md for the still-separate Drive/ledger races and API changes.
 The next operational boundary is explicit controlled-deployment approval, followed
 by separate approval for any live Garmin smoke test.
+
+## Daily health finalization — local development validation (2026-10-04)
+
+This later phase is a local, uncommitted review patch based on
+`6d550ee7cefa89395fb1f519acbe5168767b2b6c`. It does not alter the previously frozen
+Phase 2B.2 source or its historical Pi test evidence. The user reports Phase 2B.2
+activity and health live smoke tests passed; no new live operations were performed
+for this health-finalization phase.
+
+- macOS Python 3.9.6: **94/94 tests pass**.
+- Independent source-only directory, fresh stdlib-only venv (no pip/packages/private
+  configuration/runtime files): **94/94 tests pass**.
+- Original 46 collector/coordinator test cases retained. `test_garmin_auth.py` is
+  byte-for-byte unchanged. Three existing entry-path tests now use explicit past
+  ranges/Berlin clock injection: the removed no-argument through-today behavior is
+  intentionally no longer accepted. Both-date acquisition/login/lease assertions
+  remain; COMPLETE/exit assertions were added. Test runtime directories are synthetic.
+- Added **46 health-state/workflow tests** and **2 timer-contract/DST tests**.
+- Coverage includes strict/corrupt state, contiguous prefix, first failure, resume,
+  Drive failure, GarminBusy, today exclusion, already-caught-up no-op, downtime,
+  repair, job bounds/pacing, Berlin DST/UTC boundaries, private filesystem checks,
+  file/directory fsync and replace failures, a killed synthetic process between
+  upload and state commit, spawned-process/thread exclusion, fork descriptor safety,
+  stable lock inode, expired handles, lock order and provisional/no-state paths.
+- Import tests preserve the original fresh-process no-configuration/no-service
+  check and add guarded imports of the new modules. No production SDK client is
+  constructed. Garmin, Drive, Renpho and Telegram operations use fakes/mocks.
+- AST comparison confirms `health_sync.sync_health_data` itself is unchanged.
+  Its standalone today wrapper changes; existing health payload assertions pass.
+- `garmin_auth.py`, `collector_runtime.py`, activity `backfill.py`, `renpho_sync.py`
+  and `tests/test_garmin_auth.py` remain unchanged against the baseline.
+- All Python source is compiled in memory without writing bytecode.
+- Timer syntax/behavior was researched in upstream systemd v252 documentation.
+  The two local timer tests check the template contract and Berlin DST conversion;
+  they are **not** a systemd parser or Pi validation. Installed Pi systemd version,
+  rendered-unit verification and calendar/DST parser checks remain for separately
+  approved credential-free staging.
+
+No production source/configuration/service was touched. No SSH, credential reads,
+Garmin/Drive/Renpho calls, historical acquisition, deployment, timer installation,
+activation or push was performed. Synthetic ranges are fixtures, not personal data.
+The implementation is ready for local review before Pi staging, not approved for
+activation. See [HEALTH_FINALIZATION.md](HEALTH_FINALIZATION.md) for invariants,
+limits, concurrency, bootstrap/repair and the staged migration/rollback procedure.

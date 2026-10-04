@@ -19,6 +19,9 @@ import health_sync
 import backfill
 import health_backfill
 import renpho_backfill
+import health_jobs
+from health_state import HealthStore
+from datetime import timezone
 from garmin_auth import GarminCoordinator, GarminBusy
 
 ACTIVITIES=[
@@ -57,7 +60,7 @@ class CollectorTests(unittest.TestCase):
         def renpho(date):self.check_outside();self.events.append(('renpho',date));return {'weight':70,'is_carried_forward':True,'last_measured_date':'2026-09-20'}
         def mark(activity_id):self.check_outside();self.marked.append(activity_id)
         fakebot=SimpleNamespace(send_message=lambda chat,text,**kw:self.messages.append(text))
-        self.patches=[patch.object(botmod,'bot',fakebot)]
+        self.patches=[patch.object(botmod,'bot',fakebot), patch.object(health_jobs, 'default_store', return_value=HealthStore(self.root/'health-runtime'))]
         for module in (botmod,backfill,health_sync):
             self.patches += [patch.object(module,'init_garmin',self.init),patch.object(module,'get_drive_folder_id',return_value='root'),patch.object(module,'get_or_create_drive_folder',side_effect=folder),patch.object(module,'upload_to_drive',side_effect=upload)]
         for module in (botmod,backfill):
@@ -110,10 +113,8 @@ class CollectorTests(unittest.TestCase):
         with patch.object(health_sync,'init_garmin',side_effect=GarminBusy('busy')):self.assertFalse(health_sync.sync_health_data('2026-09-28'))
         self.assertEqual(self.login_count,0);self.assertIn('busy',self.output.getvalue())
     def test_standalone_health_entry(self):
-        class Clock(RealDatetime):
-            @classmethod
-            def now(cls):return cls(2026,9,28)
-        with patch.object(health_sync,'datetime',Clock):health_sync.main()
+        with patch.object(health_jobs,'berlin_today',return_value=RealDatetime(2026,9,28).date()):
+            self.assertEqual(health_sync.main(),0)
         self.assertIn(('stats','2026-09-28'),self.events)
     def test_telegram_health_entry(self):
         botmod.trigger_health_sync_bot(self.message())
@@ -131,16 +132,18 @@ class CollectorTests(unittest.TestCase):
         with patch.object(backfill,'init_garmin',side_effect=GarminBusy('busy')):backfill.run_full_backfill()
         self.assertEqual(self.login_count,0);self.assertEqual(self.uploads,[])
     def test_health_backfill_indirect_and_per_date(self):
-        class Clock(RealDatetime):
-            @classmethod
-            def now(cls):return cls(2026,9,24)
-        with patch.object(health_backfill,'datetime',Clock),patch.object(health_backfill.time,'sleep',side_effect=lambda seconds:self.check_outside()):health_backfill.run_health_backfill()
+        # Preserve the two-date Garmin/lease regression while requiring explicit
+        # past bounds instead of the intentionally removed through-today loop.
+        result=health_backfill.run_health_backfill('2026-09-23','2026-09-24',
+            now=RealDatetime(2026,9,25,tzinfo=timezone.utc),
+            sleep=lambda seconds:self.check_outside())
+        self.assertEqual(result['status'],'COMPLETE')
         self.assertEqual([e for e in self.events if e[0]=='stats'],[('stats','2026-09-23'),('stats','2026-09-24')]);self.assertEqual(self.login_count,2)
     def test_renpho_backfill_indirect_and_per_date(self):
-        class Clock(RealDatetime):
-            @classmethod
-            def now(cls):return cls(2026,4,24)
-        with patch.object(renpho_backfill,'datetime',Clock),patch.object(renpho_backfill.time,'sleep',side_effect=lambda seconds:self.check_outside()):renpho_backfill.backfill_history()
+        result=renpho_backfill.backfill_history('2026-04-23','2026-04-24',
+            now=RealDatetime(2026,4,25,tzinfo=timezone.utc),
+            sleep=lambda seconds:self.check_outside())
+        self.assertEqual(result['status'],'COMPLETE')
         self.assertEqual([e for e in self.events if e[0]=='stats'],[('stats','2026-04-23'),('stats','2026-04-24')]);self.assertEqual(self.login_count,2)
     def test_threaded_telegram_callers(self):
         errors=[]

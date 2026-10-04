@@ -1,0 +1,12 @@
+# REVIEW ONLY. Explicit IANA timezone; independent of the host timezone.
+[Unit]
+Description=Daily past-day Garmin health finalization at Berlin 10:00
+
+[Timer]
+OnCalendar=*-*-* 10:00:00 Europe/Berlin
+AccuracySec=1min
+Persistent=true
+Unit=garmin-health-daily.service
+
+[Install]
+WantedBy=timers.target

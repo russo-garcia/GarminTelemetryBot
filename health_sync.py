@@ -56,10 +56,21 @@ def sync_health_data(date_str):
         return False
 
 def main():
-    # When run directly, it defaults to syncing today's data
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    sync_health_data(today_str)
+    # Standalone today refresh uses the same health-job lease as Telegram.
+    from health_jobs import refresh_today
+    from health_state import HealthJobBusy, HealthStateError
+    try:
+        day, success = refresh_today()
+    except HealthJobBusy:
+        print("Health job busy; retry later.")
+        return 75
+    except (HealthStateError, OSError, ValueError):
+        print("Health runtime configuration is unavailable.")
+        return 2
+    if success:
+        print(f"Provisional/open health snapshot for {day}; finalization is a separate post-day job.")
+    return 0 if success else 75
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

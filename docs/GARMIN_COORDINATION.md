@@ -193,3 +193,14 @@ been executed by this development task.
 Tests use only the standard library, fake clients and temporary synthetic files.
 Run from repository root: `python3 -B -m unittest discover -s tests -v`.
 Final execution counts/environment and repository checks are in VALIDATION.md.
+
+## Subsequent local health-finalization review
+
+The health-finalization development phase adds a separate stable health-job lease
+outside the unchanged Garmin lease: **health job -> Garmin authentication**. It
+serializes daily/bootstrap/repair/provisional health uploads and state commits.
+The historical backfill-loop descriptions above describe the Phase 2B.2 baseline;
+health/legacy Renpho backfill now require explicit bounded past ranges. Activity
+acquisition and the Garmin coordinator are unchanged. No new authentication store,
+owner or reverse lock acquisition is added. This is not a production deployment.
+See [HEALTH_FINALIZATION.md](HEALTH_FINALIZATION.md) for the current local design.

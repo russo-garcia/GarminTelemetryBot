@@ -89,18 +89,23 @@ def sync_status(message):
     bot.send_message(message.chat.id, f"📊 **System Status**\nTotal unique activities synced to Drive: {synced_count}\nGoogle Drive API: Connected\nGarmin API: Ready")
 
 def trigger_health_sync_bot(message):
-    from health_sync import sync_health_data
+    from health_jobs import refresh_today
+    from health_state import HealthJobBusy, HealthStateError
 
-    bot.send_message(message.chat.id, "❤️ Fetching today's health and sleep metrics...")
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    
-    # Calls the standalone script logic
-    success = sync_health_data(today_str)
-    
+    bot.send_message(message.chat.id, "❤️ Refreshing today's provisional health snapshot (Europe/Berlin)...")
+    try:
+        today_str, success = refresh_today()
+    except HealthJobBusy:
+        bot.send_message(message.chat.id, "⏳ A health job is active. Please retry later.")
+        return
+    except (HealthStateError, OSError, ValueError):
+        bot.send_message(message.chat.id, "❌ Health runtime configuration is unavailable.")
+        return
     if success:
-        bot.send_message(message.chat.id, f"✅ Successfully synced comprehensive health data for {today_str}.")
+        bot.send_message(message.chat.id, f"✅ Successfully synced provisional/open health data for {today_str}. It is expected to be finalized automatically after the day ends.")
     else:
-        bot.send_message(message.chat.id, f"❌ Failed to sync health data for {today_str}. Check Pi logs.")
+        bot.send_message(message.chat.id, f"❌ Failed to refresh provisional health data for {today_str}. Please retry later.")
+
 
 def placeholder_handler(message):
     bot.send_message(message.chat.id, "🔧 Feature under construction.")
