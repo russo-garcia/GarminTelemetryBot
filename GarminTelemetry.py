@@ -2,83 +2,15 @@ import os
 import json
 import tempfile
 from datetime import datetime
-import telebot
-from telebot.types import ReplyKeyboardMarkup, KeyboardButton
-from garminconnect import Garmin
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
+from garmin_auth import GarminBusy
+from collector_runtime import (init_garmin, get_config, get_drive_folder_id,
+    get_or_create_drive_folder, upload_to_drive, get_synced_ids, mark_as_synced)
 
-CONFIG_FILE = "config.json"
-SYNC_LEDGER = "synced_ids.txt"
+# Initialized explicitly by run_bot; helper imports do not create a Telegram bot.
+bot = None
 
-with open(CONFIG_FILE, "r") as f:
-    config = json.load(f)
-
-TELEGRAM_TOKEN = config["TELEGRAM_TOKEN"]
-GARMIN_EMAIL = config["GARMIN_EMAIL"]
-GARMIN_PASSWORD = config["GARMIN_PASSWORD"]
-DRIVE_FOLDER_ID = config["DRIVE_FOLDER_ID"]
-
-bot = telebot.TeleBot(TELEGRAM_TOKEN)
-
-scopes = ['https://www.googleapis.com/auth/drive.file']
-creds = Credentials.from_authorized_user_file('token.json', scopes)
-drive_service = build('drive', 'v3', credentials=creds)
-
-def init_garmin():
-    client = Garmin(GARMIN_EMAIL, GARMIN_PASSWORD)
-    client.login("garmin_tokens.json")
-    return client
-
-def get_or_create_drive_folder(folder_name, parent_id):
-    """Searches Drive for a folder by name. Creates it if missing."""
-    query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and '{parent_id}' in parents and trashed=false"
-    results = drive_service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
-    items = results.get('files', [])
-    
-    if items:
-        return items[0]['id']
-    else:
-        file_metadata = {
-            'name': folder_name,
-            'mimeType': 'application/vnd.google-apps.folder',
-            'parents': [parent_id]
-        }
-        file = drive_service.files().create(body=file_metadata, fields='id').execute()
-        return file.get('id')
-
-def upload_to_drive(file_path, file_name, mime_type, parent_id):
-    # Check if a file with this exact name already exists in the target folder
-    query = f"name='{file_name}' and '{parent_id}' in parents and trashed=false"
-    results = drive_service.files().list(q=query, spaces='drive', fields='files(id)').execute()
-    items = results.get('files', [])
-    
-    media = MediaFileUpload(file_path, mimetype=mime_type, resumable=True)
-    
-    if items:
-        # File exists: update the content (overwrite) while keeping the same file ID
-        existing_file_id = items[0]['id']
-        file = drive_service.files().update(fileId=existing_file_id, media_body=media, fields='id').execute()
-        return file.get('id')
-    else:
-        # File does not exist: create a new one
-        file_metadata = {'name': file_name, 'parents': [parent_id]}
-        file = drive_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-        return file.get('id')
-
-def get_synced_ids():
-    if not os.path.exists(SYNC_LEDGER):
-        return []
-    with open(SYNC_LEDGER, "r") as f:
-        return [line.strip() for line in f.readlines()]
-
-def mark_as_synced(activity_id):
-    with open(SYNC_LEDGER, "a") as f:
-        f.write(f"{activity_id}\n")
-
-@bot.message_handler(commands=['start'])
 def send_welcome(message):
+    from telebot.types import ReplyKeyboardMarkup, KeyboardButton
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     # Row 1: 2 buttons
     markup.row(
@@ -92,13 +24,12 @@ def send_welcome(message):
     )
     bot.send_message(message.chat.id, "🛰️ Garmin Telemetry Router Online.\nReady to extract and sync.", reply_markup=markup)
 
-@bot.message_handler(func=lambda message: message.text == "🏃 Get Latest Activities")
 def trigger_sync(message):
     bot.send_message(message.chat.id, "🔄 Connecting to Garmin API... fetching recent activities.")
     
     try:
-        gclient = init_garmin()
-        activities = gclient.get_activities(0, 5)
+        with init_garmin() as gclient:
+            activities = gclient.get_activities(0, 5)
         synced_ids = get_synced_ids()
         
         new_sync_count = 0
@@ -122,12 +53,13 @@ def trigger_sync(message):
                     month_str = "Unknown_Month"
 
                 # 2. Build the Drive Path (Activity Type -> Year -> Month)
-                type_folder_id = get_or_create_drive_folder(act_type.capitalize(), DRIVE_FOLDER_ID)
+                type_folder_id = get_or_create_drive_folder(act_type.capitalize(), get_drive_folder_id())
                 year_folder_id = get_or_create_drive_folder(year_str, type_folder_id)
                 final_folder_id = get_or_create_drive_folder(month_str, year_folder_id)
                 
                 # 3. Download and Upload
-                fit_data = gclient.download_activity(act_id, dl_fmt=gclient.ActivityDownloadFormat.ORIGINAL)
+                with init_garmin() as gclient:
+                    fit_data = gclient.download_activity(act_id)
                 
                 with tempfile.TemporaryDirectory() as tmpdirname:
                     fit_path = os.path.join(tmpdirname, f"{act_id}.fit")
@@ -147,15 +79,15 @@ def trigger_sync(message):
         else:
             bot.send_message(message.chat.id, f"✅ Successfully pushed {new_sync_count} structured workout(s) to Google Drive.")
             
-    except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Sync Error: {str(e)}")
+    except GarminBusy:
+        bot.send_message(message.chat.id, "⏳ Garmin is busy. Please retry shortly.")
+    except Exception:
+        bot.send_message(message.chat.id, "❌ Sync Error: acquisition or upload failed.")
 
-@bot.message_handler(func=lambda message: message.text == "📊 Sync Status")
 def sync_status(message):
     synced_count = len(get_synced_ids())
     bot.send_message(message.chat.id, f"📊 **System Status**\nTotal unique activities synced to Drive: {synced_count}\nGoogle Drive API: Connected\nGarmin API: Ready")
 
-@bot.message_handler(func=lambda message: message.text == "❤️ Get Health Data")
 def trigger_health_sync_bot(message):
     from health_sync import sync_health_data
 
@@ -170,9 +102,23 @@ def trigger_health_sync_bot(message):
     else:
         bot.send_message(message.chat.id, f"❌ Failed to sync health data for {today_str}. Check Pi logs.")
 
-@bot.message_handler(func=lambda message: message.text == "✨ New Button")
 def placeholder_handler(message):
     bot.send_message(message.chat.id, "🔧 Feature under construction.")
 
-if __name__ == '__main__':
+def run_bot():
+    global bot
+    import telebot
+    bot = telebot.TeleBot(get_config()["TELEGRAM_TOKEN"])
+    bot.register_message_handler(send_welcome, commands=['start'])
+    for text, handler in (
+        ("🏃 Get Latest Activities", trigger_sync),
+        ("📊 Sync Status", sync_status),
+        ("❤️ Get Health Data", trigger_health_sync_bot),
+        ("✨ New Button", placeholder_handler),
+    ):
+        bot.register_message_handler(handler, func=lambda message, text=text: message.text == text)
     bot.infinity_polling()
+
+
+if __name__ == '__main__':
+    run_bot()

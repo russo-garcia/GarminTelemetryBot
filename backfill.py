@@ -3,11 +3,11 @@ import os
 import json
 import tempfile
 from datetime import datetime
-from GarminTelemetry import init_garmin, get_synced_ids, mark_as_synced, get_or_create_drive_folder, upload_to_drive, DRIVE_FOLDER_ID
+from collector_runtime import init_garmin, get_synced_ids, mark_as_synced, get_or_create_drive_folder, upload_to_drive, get_drive_folder_id
+from garmin_auth import GarminBusy
 
 def run_full_backfill():
     print("Starting full backfill since June 26...")
-    gclient = init_garmin()
     synced_ids = get_synced_ids()
     
     new_sync_count = 0
@@ -16,7 +16,12 @@ def run_full_backfill():
     
     while True:
         print(f"Fetching activities {start_index} to {start_index + chunk_size}...")
-        activities = gclient.get_activities(start_index, chunk_size)
+        try:
+            with init_garmin() as gclient:
+                activities = gclient.get_activities(start_index, chunk_size)
+        except GarminBusy:
+            print("⏳ Garmin is busy; stop backfill and retry later.")
+            return
         
         if not activities:
             print("No more activities found in Garmin history.")
@@ -42,13 +47,14 @@ def run_full_backfill():
                 month_str = dt.strftime("%m") if start_time_str else "Unknown_Month"
 
                 # Route to appropriate Drive folders
-                type_folder_id = get_or_create_drive_folder(act_type.capitalize(), DRIVE_FOLDER_ID)
+                type_folder_id = get_or_create_drive_folder(act_type.capitalize(), get_drive_folder_id())
                 year_folder_id = get_or_create_drive_folder(year_str, type_folder_id)
                 final_folder_id = get_or_create_drive_folder(month_str, year_folder_id)
                 
                 try:
                     # Download raw FIT file
-                    fit_data = gclient.download_activity(act_id, dl_fmt=gclient.ActivityDownloadFormat.ORIGINAL)
+                    with init_garmin() as gclient:
+                        fit_data = gclient.download_activity(act_id)
                     
                     with tempfile.TemporaryDirectory() as tmpdirname:
                         fit_path = os.path.join(tmpdirname, f"{act_id}.fit")
@@ -66,8 +72,11 @@ def run_full_backfill():
                     print(f"Successfully synced {act_id}. Waiting 3 seconds to avoid rate limits...")
                     time.sleep(3) # Crucial pause to prevent 429 IP ban
                     
-                except Exception as e:
-                    print(f"Error syncing {act_id}: {e}")
+                except GarminBusy:
+                    print("⏳ Garmin is busy; stop backfill and retry later.")
+                    return
+                except Exception:
+                    print(f"Error syncing {act_id}: acquisition or upload failed.")
                     time.sleep(10) # Back off if an error occurs
         
         start_index += chunk_size
@@ -75,4 +84,7 @@ def run_full_backfill():
     print(f"\nBackfill complete. Synced {new_sync_count} historical activities.")
 
 if __name__ == '__main__':
-    run_full_backfill()
+    try:
+        run_full_backfill()
+    except Exception:
+        print("Backfill stopped: acquisition or upload failed.")

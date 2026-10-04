@@ -4,3 +4,14 @@ __pycache__/
 *.pyc
 *.save
 synced_ids.txt
+
+# Operational coordination/private runtime artifacts
+*.lock
+*.log
+.env
+.env.*
+*.pem
+*.key
+.venv*/
+.pytest_cache/
+.coverage

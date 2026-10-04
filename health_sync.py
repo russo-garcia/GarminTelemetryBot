@@ -2,22 +2,22 @@ import os
 import json
 import tempfile
 from datetime import datetime
-from GarminTelemetry import init_garmin, get_or_create_drive_folder, upload_to_drive, DRIVE_FOLDER_ID
+from collector_runtime import init_garmin, get_or_create_drive_folder, upload_to_drive, get_drive_folder_id
+from garmin_auth import GarminBusy
 from renpho_sync import get_renpho_metrics
 
 def sync_health_data(date_str):
     print(f"Fetching health and sleep metrics for {date_str}...")
     try:
-        gclient = init_garmin()
-
         # Parse date for folder structure
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         year_str = dt.strftime("%Y")
         month_str = dt.strftime("%m")
 
         # Fetch daily stats and sleep data
-        stats = gclient.get_stats(date_str)
-        sleep = gclient.get_sleep_data(date_str)
+        with init_garmin() as gclient:
+            stats = gclient.get_stats(date_str)
+            sleep = gclient.get_sleep_data(date_str)
 
         # Fetch Renpho data
         print(f"Fetching Renpho data for {date_str}...")
@@ -32,7 +32,7 @@ def sync_health_data(date_str):
         }
 
         # Route to Daily_Health/Year/Month
-        type_folder_id = get_or_create_drive_folder("Daily_Health", DRIVE_FOLDER_ID)
+        type_folder_id = get_or_create_drive_folder("Daily_Health", get_drive_folder_id())
         year_folder_id = get_or_create_drive_folder(year_str, type_folder_id)
         final_folder_id = get_or_create_drive_folder(month_str, year_folder_id)
 
@@ -48,11 +48,18 @@ def sync_health_data(date_str):
         print(f"✅ Successfully synced health data for {date_str}.")
         return True
 
-    except Exception as e:
-        print(f"❌ Error syncing health data for {date_str}: {e}")
+    except GarminBusy:
+        print("⏳ Garmin is busy; health synchronization was not completed. Retry later.")
+        return False
+    except Exception:
+        print(f"❌ Error syncing health data for {date_str}: acquisition or upload failed.")
         return False
 
-if __name__ == '__main__':
+def main():
     # When run directly, it defaults to syncing today's data
     today_str = datetime.now().strftime("%Y-%m-%d")
     sync_health_data(today_str)
+
+
+if __name__ == '__main__':
+    main()

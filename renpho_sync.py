@@ -1,9 +1,9 @@
 import json
 from datetime import datetime
-from renpho import RenphoClient
 
 def get_renpho_metrics(date_str):
     try:
+        from renpho import RenphoClient
         config_path = "/home/russogarcia/Garmin_Telemetry_Bot/config.json"
         with open(config_path, "r") as f:
             config = json.load(f)
@@ -45,8 +45,8 @@ def get_renpho_metrics(date_str):
         # If the loop finishes without returning, the target date is before your first weigh-in
         return None 
         
-    except Exception as e:
-        print(f"❌ Renpho API Error: {e}")
+    except Exception:
+        print("❌ Renpho API Error: acquisition failed.")
         return None
 
 if __name__ == '__main__':
