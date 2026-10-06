@@ -1,6 +1,7 @@
 """Legacy name for health backfill; now requires the same explicit bounded range.
 
-This script has always called Garmin health acquisition, not just Renpho.
+This deprecated name now performs Garmin-only whole-health acquisition.
+It never imports/calls the retired Renpho provider.
 Retain the administrative entry point without an uncoordinated automatic loop.
 """
 from health_backfill import run_health_backfill, main

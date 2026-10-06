@@ -83,7 +83,7 @@ class _Session:
         if (not self.__active or self.__pid != os.getpid()
                 or self.__thread != threading.get_ident()):
             raise LeaseExpired('Garmin session is outside its owning lifetime/thread')
-        allowed = {'get'} if self.__reader else {'get_activities', 'download_activity', 'get_stats', 'get_sleep_data'}
+        allowed = {'get'} if self.__reader else {'get_activities', 'download_activity', 'get_stats', 'get_sleep_data', 'get_weigh_ins'}
         if method not in allowed:
             raise ValueError('Operation is outside the acquisition interface')
         try:
@@ -110,6 +110,9 @@ class _Session:
 
     def get_sleep_data(self, date):
         return self._call('get_sleep_data', date)
+
+    def get_weigh_ins(self, startdate, enddate):
+        return self._call('get_weigh_ins', startdate, enddate)
 
     def get(self, path):
         return self._call('get', path)

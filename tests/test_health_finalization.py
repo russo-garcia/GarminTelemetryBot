@@ -86,11 +86,18 @@ class HealthTests(unittest.TestCase):
                 with self.assertRaises(hs.HealthStateError):lease.advance(day,TODAY)
     def test_drive_failure_from_real_primitive_never_finalizes(self):
         from contextlib import contextmanager
+        weight_calls=[]
+        def empty_weights(start,end):
+            weight_calls.append((start,end))
+            return {'dailyWeightSummaries':[], 'previousDateWeight':None,
+                    'nextDateWeight':None, 'totalAverage':{}}
         @contextmanager
-        def session():yield SimpleNamespace(get_stats=lambda _: {},get_sleep_data=lambda _: {})
-        with patch.object(health_sync,'init_garmin',session),patch.object(health_sync,'get_renpho_metrics',return_value=None),patch.object(health_sync,'get_drive_folder_id',return_value='fake'),patch.object(health_sync,'get_or_create_drive_folder',return_value='fake'),patch.object(health_sync,'upload_to_drive',side_effect=RuntimeError('SYNTHETIC_SECRET')),redirect_stdout(io.StringIO()) as output:
+        def session():yield SimpleNamespace(get_stats=lambda _: {},get_sleep_data=lambda _: {},get_weigh_ins=empty_weights)
+        with patch.object(health_sync,'init_garmin',session),patch.object(health_sync,'get_drive_folder_id',return_value='fake'),patch.object(health_sync,'get_or_create_drive_folder',return_value='fake'),patch.object(health_sync,'upload_to_drive',side_effect=RuntimeError('SYNTHETIC_SECRET')) as upload,redirect_stdout(io.StringIO()) as output:
             r=self.run_job(sync=health_sync.sync_health_data)
         self.assertEqual(r['status'],'INTERRUPTED');self.assertIsNone(self.state().finalized_through);self.assertNotIn('SYNTHETIC_SECRET',output.getvalue())
+        self.assertEqual(weight_calls,[('2026-04-01','2026-04-01')]);upload.assert_called_once()
+        self.assertEqual(r['completed_dates'],0);self.assertEqual(r['failed_date'],'2026-04-01')
     def test_real_primitive_garmin_busy(self):
         with patch.object(health_sync,'init_garmin',side_effect=GarminBusy('synthetic')),redirect_stdout(io.StringIO()):r=self.run_job(sync=health_sync.sync_health_data)
         self.assertEqual(r['status'],'INTERRUPTED');self.assertIsNone(self.state().finalized_through)

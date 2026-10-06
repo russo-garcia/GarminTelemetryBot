@@ -23,10 +23,11 @@ def default_store():
     return HealthStore()
 
 
-def _sync(day, sync):
+def _sync(day, sync, weight_context=None):
     if sync is None:
         from health_sync import sync_health_data
-        sync = sync_health_data
+        sync = sync_health_data if weight_context is None else (
+            lambda date_str: sync_health_data(date_str, weight_context=weight_context))
     try:
         return 'OK' if sync(day.isoformat()) is True else 'SYNC_FAILED'
     except GarminBusy:
@@ -79,12 +80,17 @@ def run_range(*, start=None, end=None, repair=False, daily=False, store=None,
             if not daily and (first < state.history_start or first > state.next_date):
                 raise HealthStateError('Requested range would skip history or change history_start')
             current = state.next_date
+        weight_context = None
+        if sync is None and current <= last:
+            from garmin_weight import WeightContext
+            window_end = current + timedelta(days=min(max_days - 1, (last - current).days))
+            weight_context = WeightContext(window_end.isoformat())
         count = 0
         deadline = monotonic() + max_seconds
         while current <= last:
             if count >= max_days or monotonic() >= deadline:
                 return _result('INTERRUPTED', count, state, last, 'JOB_LIMIT')
-            outcome = _sync(current, sync)
+            outcome = _sync(current, sync, weight_context)
             if outcome != 'OK':
                 return _result('INTERRUPTED', count, state, last, outcome, current)
             if not repair:

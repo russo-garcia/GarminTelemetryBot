@@ -22,6 +22,7 @@ class FakeGarmin:
         return b'fictional-fit'
     def get_stats(self, date):return {'date':date,'steps':0}
     def get_sleep_data(self, date):return {'sleep':None}
+    def get_weigh_ins(self, start, end):return {'dates':[start,end]}
 
 
 def hold_process(store,lock,connection,delay):
@@ -50,6 +51,21 @@ class CoordinatorTests(unittest.TestCase):
             self.assertEqual(c.download_activity('1'),b'fictional-fit')
             self.assertFalse(hasattr(c,'login'));self.assertFalse(hasattr(c,'client'))
         self.assertTrue(self.lock.exists())
+    def test_weight_facade_read_only_expiry_and_detachment(self):
+        raw={'dates':['a','b']}
+        with self.coordinator.session(FakeGarmin) as c:
+            with patch.object(FakeGarmin,'get_weigh_ins',return_value=raw):
+                result=c.get_weigh_ins('a','b');result['dates'].append('c')
+                self.assertEqual(raw,{'dates':['a','b']})
+            self.assertFalse(hasattr(c,'get_daily_weigh_ins'))
+            self.assertFalse(hasattr(c,'add_weigh_in'))
+            method=c.get_weigh_ins
+        with self.assertRaises(LeaseExpired):method('a','b')
+    def test_weight_request_failure_sanitized(self):
+        with self.coordinator.session(FakeGarmin) as c:
+            with patch.object(FakeGarmin,'get_weigh_ins',side_effect=RuntimeError('FAKE_SECRET')):
+                with self.assertRaises(GarminUnavailable) as err:c.get_weigh_ins('a','b')
+                self.assertNotIn('FAKE_SECRET',str(err.exception))
     def test_fresh_client_and_reload(self):
         created=[]
         def factory():

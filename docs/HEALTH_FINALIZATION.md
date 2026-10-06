@@ -1,4 +1,29 @@
-# Daily health finalization — local development/review
+# Daily health finalization
+
+## Current optional-weight migration (local review only)
+
+Garmin Connect is the recorded-weight acquisition source. Trusted scale readings
+are entered manually by the athlete. Weight is optional; BMI is not acquired.
+Renpho is retired from all operational health paths. See
+[GARMIN_WEIGHT.md](GARMIN_WEIGHT.md) for the versioned grams contract, range
+carry-in, missing/failure semantics and synthetic validation.
+
+The one-date primitive accepts an optional job-local weight context. Normal
+bootstrap/daily/repair jobs share at-most-45-day windows, one range query per
+window, using previousDateWeight and daily latestWeight. Provisional refresh uses
+one day. Failed/missing/ambiguous weight never blocks core health/sleep plus Drive
+success. Core Garmin/Drive failures still stop without advancing the watermark.
+Weight metadata is additive; health completeness definitions remain unchanged.
+
+No production state/history is rewritten by this patch. Existing Renpho-sourced
+weights remain historical, not relabeled. Null optional weight alone requires no
+historical repair. Source review, Pi staging and deployment are separate approvals.
+
+## Historical initial development context
+
+The following baseline/deployment statement records the original development
+phase, not the current production status. Later staging evidence is recorded in
+VALIDATION.md; it does not validate the new optional-weight patch on the Pi.
 
 Baseline: `6d550ee7cefa89395fb1f519acbe5168767b2b6c`. Production remains on
 `7adf3afb4af261d88b759c0d22497e7577c255e8`. No deployment, bootstrap, live acquisition,
@@ -10,7 +35,9 @@ Berlin today is provisional/open. Past dates are unfinalized until a successful
 post-day call to the existing `health_sync.sync_health_data(YYYY-MM-DD)` returns
 exactly `True` and progress is durably recorded. Finalization is an operational
 skip policy, not filesystem immutability or proof Garmin has complete physiology.
-It does not change the JSON health payload or analytics' completeness semantics.
+The original finalization work did not change the JSON health payload or analytics'
+completeness semantics. The current optional-weight patch adds weight_acquisition
+metadata and preserves that same completeness policy.
 
 Private state lives at module-directory `.health-runtime/health_state.json`:
 
@@ -110,9 +137,10 @@ Telegram `❤️ Get Health Data` and standalone `health_sync.py` refresh only B
 today, clearly described as provisional/open. They share the health-job lock so a
 long-running provisional upload cannot overlap a later finalizer across midnight.
 They NEVER read, initialize or update the finalization state. The one-date primitive
-itself stays unchanged and remains an internal low-level operation: arbitrary direct
+remains an internal low-level operation (now with optional weight context): arbitrary direct
 callers can bypass the new health-job lease and must not be used as normal scheduled
-or historical entry points. No payload fields or metric formulas changed.
+or historical entry points. Metric formulas remain unchanged; see the additive
+weight payload metadata documented above.
 
 ## Concurrency and lock order
 
@@ -123,8 +151,8 @@ queue or duplicate the job. The systemd singleton adds another guard for timer
 invocations; the file lock handles manual processes and threads too.
 
 Order: **health-job lease -> existing Garmin authentication lease**. The Garmin
-lease is released by the unchanged primitive before Renpho, Drive, state commit and
-pacing. Activity sync uses Garmin only and can interleave between health dates.
+lease includes core health/sleep and optional Garmin weight. It is released before
+Drive, state commit and pacing. No Renpho operation remains. Activity sync uses Garmin only and can interleave between health dates.
 GarminBusy/False never advances progress. No second Garmin client/credential-store
 mechanism is introduced. Never acquire a health-job lease while holding Garmin or
 prescription state ownership. Future prescription ordering remains Garmin auth ->
@@ -161,10 +189,10 @@ These semantics were checked against the upstream **systemd v252** documentation
 - [systemd.timer: active unit, accuracy and persistence](https://raw.githubusercontent.com/systemd/systemd/v252/man/systemd.timer.xml)
 
 Conservative review target: systemd 252 or newer. This is a documentation baseline,
-not a claim that these features were first introduced in 252. The Pi's installed
-systemd version is **UNKNOWN** in the available evidence; no SSH was performed.
-macOS has no systemd calendar parser. Before activation, credential-free Pi staging
-must check `systemd-analyze --version`, `systemd-analyze calendar --iterations=3
+not a claim that these features were first introduced in 252. At initial development the Pi's installed
+systemd version was unknown. Subsequent credential-free staging verified version
+257 and the March/October DST sequences (VALIDATION.md). macOS has no systemd
+calendar parser. The documented staging procedure checks `systemd-analyze --version`, `systemd-analyze calendar --iterations=3
 '*-*-* 10:00:00 Europe/Berlin'`, and `systemd-analyze verify` on the rendered units.
 Check March/October DST boundaries with explicit base times and confirm installed
 Europe/Berlin tzdata and synchronized wall time. Do not infer clock readiness solely

@@ -204,3 +204,21 @@ health/legacy Renpho backfill now require explicit bounded past ranges. Activity
 acquisition and the Garmin coordinator are unchanged. No new authentication store,
 owner or reverse lock acquisition is added. This is not a production deployment.
 See [HEALTH_FINALIZATION.md](HEALTH_FINALIZATION.md) for the current local design.
+
+## Current local Garmin-only optional-weight change
+
+The preceding Phase 2B.2 preserved-behavior statements are historical. This local
+patch deliberately retires Renpho acquisition. The guarded owner facade adds only
+get_weigh_ins(startdate, enddate); no daily weight, write or second auth API is
+exposed. Its existing lifetime/thread checks, detached plain-data projection and
+sanitized SDK errors apply unchanged. The read-only reader still permits only its
+existing get interface, never the owner acquisition methods.
+
+Health-job lease -> existing Garmin lease remains the sole ordering. Optional
+weight is fetched after core health/sleep in the same lease, once per bounded
+window. It does not retain a client across days. Drive upload, health-state commit
+and pacing happen after Garmin release. Optional weight failures do not advance
+state independently and cannot turn a core failure into success. Renpho legacy
+backfill is only a bounded whole-health alias; retired renpho_sync cannot acquire
+anything. Credentials and installed packages are untouched. This is not deployment.
+See GARMIN_WEIGHT.md for selection/units/error behavior and VALIDATION.md for tests.

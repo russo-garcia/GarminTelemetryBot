@@ -4,9 +4,9 @@ import tempfile
 from datetime import datetime
 from collector_runtime import init_garmin, get_or_create_drive_folder, upload_to_drive, get_drive_folder_id
 from garmin_auth import GarminBusy
-from renpho_sync import get_renpho_metrics
+from garmin_weight import WeightContext
 
-def sync_health_data(date_str):
+def sync_health_data(date_str, *, weight_context=None):
     print(f"Fetching health and sleep metrics for {date_str}...")
     try:
         # Parse date for folder structure
@@ -18,17 +18,19 @@ def sync_health_data(date_str):
         with init_garmin() as gclient:
             stats = gclient.get_stats(date_str)
             sleep = gclient.get_sleep_data(date_str)
+            # Optional acquisition shares this lease; never a second client.
+            context = weight_context if weight_context is not None else WeightContext(date_str)
+            weight, weight_acquisition = context.for_day(gclient, date_str)
 
-        # Fetch Renpho data
-        print(f"Fetching Renpho data for {date_str}...")
-        renpho_data = get_renpho_metrics(date_str)
+        print(f"Optional Garmin weight for {date_str}: {weight_acquisition['outcome']}.")
 
         # Bundle into a single master payload
         health_payload = {
             "date": date_str,
             "daily_stats": stats,
             "sleep_data": sleep,
-            "weight_metrics": renpho_data
+            "weight_metrics": weight,
+            "weight_acquisition": weight_acquisition
         }
 
         # Route to Daily_Health/Year/Month

@@ -246,3 +246,60 @@ The March command used base time 2026-03-27 12:00:00 UTC; October used
 This is a source freeze and validation record only. No production changes, live
 Garmin/Drive/Renpho/Telegram operations, historical backfill, timer activation or
 push took place during source freeze. Deployment planning awaits separate approval.
+
+
+## Garmin-only optional weight — local development validation, 2026-10-06
+
+Baseline: `22f7126d414adaf64a26c6819637be47975c5034`. Uncommitted local
+implementation only; no Pi access, deployment, bootstrap, repair, timer activation,
+live API calls, commit or push in this validation. The unrelated .DS_Store remains
+untracked and untouched. Prior phase counts above are historical, not this patch.
+
+Commands from the canonical collector repository:
+
+- `python3 -B -m unittest discover -s tests -v`: **142/142 PASS**, macOS Python 3.9.6.
+- Same command in an independent source-only copy with a new stdlib-only venv:
+  **142/142 PASS**. Only tracked source/tests/docs/unit templates plus this patch's
+  new source/tests/doc were copied; no credentials, runtime files, private data or
+  prior outputs. Source parity verified before/after.
+- In-memory `compile(source_bytes, filename, 'exec')` for every Python source/test:
+  PASS, no bytecode persistence. Fresh-process import-safety tests pass with file
+  opening/network construction forbidden and no real provider SDK imported.
+- `git diff --check`: PASS.
+
+Test accounting: prior 94 test purposes retained; the obsolete Renpho carry-forward
+fixture is migrated to Garmin carry-in, expected BMI is now null, and the health
+payload/lease assertion reflects weight inside Garmin ownership. Added 48 tests:
+25 versioned parser/window tests, 21 health integration/retirement tests, and two
+owner-facade tests. No authentication concurrency/state/timer guarantees are removed.
+
+Synthetic coverage includes exact envelope; previous carry-in; Garmin latestWeight
+selection with multiple records; date/ID consistency; duplicate summaries; invalid
+units/schema/nonfinite mass; no future look-ahead; carry barriers; 45/46-day query
+bounds and resume; optional error caching; no per-day fan-out; kg conversion and
+BMI null; discarded IDs/impedance; core/Drive/busy stop behavior; repair/provisional
+state identity; no Renpho import/call from bootstrap/daily/repair/today/legacy alias;
+retired entry no config/SDK access; and exception/payload redaction. Tests use fake
+providers and temporary synthetic state only. Existing configuration/credentials
+are not modified or read by these validation runs.
+
+EnduranceAnalytics compatibility: **3/3 synthetic end-to-end cases PASS** on its
+canonical Python 3.12 environment, without analytical source changes. For each of
+measured, carried and missing optional weight, four fictional health files flowed
+through the actual canonical engine, health normalization, metric catalog, report
+projection, and Report v2 build_model/validate_model. BMI remained MISSING, never
+zero; measurement dates/carry flags survived. Measured case exposed four report
+observations, carried/missing exposed zero as existing report policy requires.
+The new collector parser produced each input. No personal config/data or previous
+outputs were loaded; no PDF or personal report was rendered/published. This is a
+compatibility check, not a rerun of the entire analytics test suite.
+
+Static grams evidence was recorded before implementing conversion: the Go Garmin
+range model documents grams and an independent Python Garmin MCP range consumer
+converts raw weight / 1000. Exact references/hashes and the distinction from the
+unit-less live payload are in GARMIN_WEIGHT.md. There is no claim of a public
+Garmin service schema guarantee. Pi staging must validate this new source separately.
+
+Historical files and paused finalization state are untouched. No June 6 repair is
+needed merely because optional weight was null. Obsolete production Renpho config
+keys and package removal remain a separately approved hardening task.

@@ -21,7 +21,7 @@ import health_backfill
 import renpho_backfill
 import health_jobs
 from health_state import HealthStore
-from datetime import timezone
+from datetime import timezone, date, timedelta
 from garmin_auth import GarminCoordinator, GarminBusy
 
 ACTIVITIES=[
@@ -53,11 +53,14 @@ class CollectorTests(unittest.TestCase):
                 return ('synthetic-fit-'+activity_id).encode()
             def get_stats(self,date):outer.check_auth();outer.events.append(('stats',date));return {'steps':0,'date':date,'restingHeartRate':None}
             def get_sleep_data(self,date):outer.check_auth();outer.events.append(('sleep',date));return {'date':date,'sleepTimeSeconds':1234}
+            def get_weigh_ins(self,start,end):
+                outer.check_auth();outer.events.append(('weight',start,end))
+                prior=(date.fromisoformat(start)-timedelta(days=1)).isoformat()
+                return {'dailyWeightSummaries':[], 'previousDateWeight':{'calendarDate':prior,'weight':70000},'nextDateWeight':None,'totalAverage':{}}
         self.client_class=Client
         def folder(name,parent):self.check_outside();self.events.append(('folder',name,parent));return parent+'/'+name
         def upload(path,name,mime,parent):
             self.check_outside();data=Path(path).read_bytes();self.uploads.append((name,mime,parent,data));return 'fictional-upload-id'
-        def renpho(date):self.check_outside();self.events.append(('renpho',date));return {'weight':70,'is_carried_forward':True,'last_measured_date':'2026-09-20'}
         def mark(activity_id):self.check_outside();self.marked.append(activity_id)
         fakebot=SimpleNamespace(send_message=lambda chat,text,**kw:self.messages.append(text))
         self.patches=[patch.object(botmod,'bot',fakebot), patch.object(health_jobs, 'default_store', return_value=HealthStore(self.root/'health-runtime'))]
@@ -65,7 +68,6 @@ class CollectorTests(unittest.TestCase):
             self.patches += [patch.object(module,'init_garmin',self.init),patch.object(module,'get_drive_folder_id',return_value='root'),patch.object(module,'get_or_create_drive_folder',side_effect=folder),patch.object(module,'upload_to_drive',side_effect=upload)]
         for module in (botmod,backfill):
             self.patches += [patch.object(module,'get_synced_ids',return_value=['102']),patch.object(module,'mark_as_synced',side_effect=mark)]
-        self.patches += [patch.object(health_sync,'get_renpho_metrics',side_effect=renpho)]
         for p in self.patches:p.start()
         self.output=io.StringIO();self.quiet=redirect_stdout(self.output);self.quiet.__enter__()
     def tearDown(self):
@@ -100,8 +102,8 @@ class CollectorTests(unittest.TestCase):
         self.assertEqual(self.login_count,1)
         name,mime,parent,data=self.uploads[0]
         self.assertEqual((name,mime,parent),('health_2026-09-28.json','application/json','root/Daily_Health/2026/09'))
-        self.assertEqual(json.loads(data),{'date':'2026-09-28','daily_stats':{'steps':0,'date':'2026-09-28','restingHeartRate':None},'sleep_data':{'date':'2026-09-28','sleepTimeSeconds':1234},'weight_metrics':{'weight':70,'is_carried_forward':True,'last_measured_date':'2026-09-20'}})
-        self.assertLess(self.events.index(('exit',)),self.events.index(('renpho','2026-09-28')))
+        self.assertEqual(json.loads(data),{'date':'2026-09-28','daily_stats':{'steps':0,'date':'2026-09-28','restingHeartRate':None},'sleep_data':{'date':'2026-09-28','sleepTimeSeconds':1234},'weight_metrics':{'weight':70,'bmi':None,'is_carried_forward':True,'last_measured_date':'2026-09-27'},'weight_acquisition':{'source':'garmin_connect','contract':'garmin-weight-range/1.0.0','outcome':'CARRIED','range_start':'2026-09-28','range_end':'2026-09-28'}})
+        self.assertLess(self.events.index(('weight','2026-09-28','2026-09-28')),self.events.index(('exit',)))
     def test_health_garmin_failure_prevents_partial_upload(self):
         def broken(date):self.check_auth();raise RuntimeError('FAKE_SECRET')
         with patch.object(self.client_class,'get_sleep_data',side_effect=broken):self.assertFalse(health_sync.sync_health_data('2026-09-28'))
@@ -180,17 +182,13 @@ class CollectorTests(unittest.TestCase):
             text={'trigger_sync':'🏃 Get Latest Activities','sync_status':'📊 Sync Status','trigger_health_sync_bot':'❤️ Get Health Data','placeholder_handler':'✨ New Button'}[f.__name__]
             self.assertTrue(kwargs['func'](SimpleNamespace(text=text)))
 
-class RenphoPreservationTests(unittest.TestCase):
+class WeightCarryForwardPreservationTests(unittest.TestCase):
     def test_existing_carry_forward_payload(self):
-        import renpho_sync
-        records=[{'timeStamp':RealDatetime(2026,9,20,12).timestamp(),'weight':70,'bmi':22}, {'timeStamp':RealDatetime(2026,9,22,12).timestamp(),'weight':71,'bmi':23}]
-        class Client:
-            def __init__(self,*args):pass
-            def login(self):pass
-            def get_all_measurements(self):return records
-        with patch.dict(sys.modules,{'renpho':SimpleNamespace(RenphoClient=Client)}),patch('builtins.open',return_value=io.StringIO('{"GARMIN_EMAIL":"synthetic","RENPHO_PASSWORD":"synthetic"}')):
-            result=renpho_sync.get_renpho_metrics('2026-09-21')
-        self.assertEqual(result,{'weight':70,'bmi':22,'is_carried_forward':True,'last_measured_date':'2026-09-20'})
+        from garmin_weight import WeightContext
+        raw={'dailyWeightSummaries':[], 'previousDateWeight':{'calendarDate':'2026-09-20','weight':70000},
+             'nextDateWeight':{'calendarDate':'2026-09-22','weight':71000},'totalAverage':{}}
+        result,_=WeightContext('2026-09-21').for_day(SimpleNamespace(get_weigh_ins=lambda *_:raw),'2026-09-21')
+        self.assertEqual(result,{'weight':70,'bmi':None,'is_carried_forward':True,'last_measured_date':'2026-09-20'})
 
 class ImportTests(unittest.TestCase):
     def test_imports_have_no_configuration_or_service_side_effects(self):
