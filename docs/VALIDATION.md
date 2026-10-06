@@ -248,7 +248,7 @@ Garmin/Drive/Renpho/Telegram operations, historical backfill, timer activation o
 push took place during source freeze. Deployment planning awaits separate approval.
 
 
-## Garmin-only optional weight — local development validation, 2026-10-06
+## Garmin-only optional weight — historical local development checkpoint (142 tests), 2026-10-06
 
 Baseline: `22f7126d414adaf64a26c6819637be47975c5034`. Uncommitted local
 implementation only; no Pi access, deployment, bootstrap, repair, timer activation,
@@ -303,3 +303,71 @@ Garmin service schema guarantee. Pi staging must validate this new source separa
 Historical files and paused finalization state are untouched. No June 6 repair is
 needed merely because optional weight was null. Obsolete production Renpho config
 keys and package removal remain a separately approved hardening task.
+
+
+## Garmin-only optional weight — corrected validation and accepted Pi staging
+
+The 142/142 local result above is a historical development checkpoint before the
+review corrections. The final corrected suite is **147/147**, including five
+additional null-sentinel parser cases. The existing Drive-failure regression now
+explicitly reaches the mocked Drive upload failure. No implementation or test
+bytes were changed while recording this staging result.
+
+### Frozen source identity
+
+- Implementation commit: `d775443aa08c8b99ca9cfbcebf2d215864967ec0`.
+- Parent baseline: `22f7126d414adaf64a26c6819637be47975c5034`.
+- All 15 reviewed file SHA-256 values matched the accepted Pi manifest immediately
+  before committing and matched the resulting committed blobs afterward.
+- This validation record is a separate documentation-only follow-up. The
+  implementation commit retains the exact Pi-validated source, tests and docs.
+- User-returned sanitized Pi transcript SHA-256: `dba54d61627e7cfb799f27b731cc12afb422957ae8b80e7c5e6661cd144a5155`.
+  The transcript and staging harness remain outside Git.
+
+### Corrected local validation
+
+- Canonical `python3 -B -m unittest discover -s tests -v`: **147/147 PASS**.
+- Independent credential-free source-only copy, same command: **147/147 PASS**.
+- Synthetic EnduranceAnalytics compatibility: **3/3 PASS** (measured, carried,
+  missing weight with null BMI), without analytics changes.
+- In-memory syntax compilation, fresh-process import safety and
+  `git diff --check`: PASS.
+
+### User-operated Raspberry Pi staging
+
+- Architecture **armv7l**; Python **3.13.5**.
+- Installed **garminconnect 0.3.16**: static source inspection confirmed
+  `Garmin.get_weigh_ins(self, startdate, enddate)` compatibility. The installed SDK
+  was not imported and no real client was constructed.
+- Complete synthetic suite: **147/147 PASS**, return code 0. All individual
+  outcomes passed, including coordinator concurrency, parser/window handling,
+  null sentinels, Drive failure, optional-weight finalization, repair/provisional
+  invariants, and Renpho retirement/import safety.
+- **15 reviewed hashes matched before and after** the run, with 11 unchanged
+  baseline support files. Syntax compilation passed for 19 Python files and
+  no persistent bytecode files were created.
+- Production daily-weight calls absent; the guarded facade permits the required
+  range read only. Retired Renpho source has no SDK/config/network operation.
+
+### Production isolation evidence
+
+- Authentication calls **0**; external API calls **0**.
+- Production credentials **not opened**; production source, state and services
+  **not modified**. No service actions or timer activation.
+- Collector remained healthy and active, PID **530**, restart count **0**;
+  production metadata remained unchanged.
+- Stable Garmin coordinator lock identity remained unchanged (inode **400225**).
+- Health daily service and timer remained absent.
+- Health-state metadata remained unchanged. State contents were intentionally
+  **not opened/reverified**. The previously established paused watermark is
+  `2026-06-29`; this staging run does not constitute a fresh read of that value.
+- Diagnostic/test writes were confined to the isolated temporary staging tree;
+  ordinary SSH/operating-system bookkeeping is outside that diagnostic claim.
+- Production release remained `9465dc06da1431a07862679ee4f6183e5eeaf657`.
+
+**GARMIN OPTIONAL WEIGHT PI STAGING VALIDATED — READY FOR SOURCE FREEZE**
+
+This record closes credential-free staging and source freeze only. No deployment,
+live API operation, bootstrap continuation, June 6 repair, timer activation or
+push was performed during source freeze. The unrelated `.DS_Store` remains
+untracked and untouched. Production changes require separate approval.
